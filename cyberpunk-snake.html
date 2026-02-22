@@ -172,9 +172,21 @@
         .controls span {
             color: #00ffff;
         }
+
+        /* Rain canvas - covers entire screen */
+        #rainCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
     </style>
 </head>
 <body>
+    <canvas id="rainCanvas"></canvas>
     <h1 class="game-title">Cyberpunk Snake</h1>
     
     <div class="score-container">
@@ -503,6 +515,167 @@
 
         // Start game
         init();
+
+        // ========== CYBERPUNK RAIN EFFECT ==========
+        const rainCanvas = document.getElementById('rainCanvas');
+        const rainCtx = rainCanvas.getContext('2d');
+        
+        // Rain drops array
+        let rainDrops = [];
+        
+        // Game field boundaries (will be calculated)
+        let gameFieldBounds = {
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 0
+        };
+        
+        // Rain colors (cyberpunk neon palette)
+        const rainColors = [
+            { color: '#00ff88', glow: 'rgba(0, 255, 136, 0.8)' },   // Matrix green
+            { color: '#00ffff', glow: 'rgba(0, 255, 255, 0.8)' },   // Cyan
+            { color: '#00ff00', glow: 'rgba(0, 255, 0, 0.8)' },     // Pure green
+            { color: '#39ff14', glow: 'rgba(57, 255, 20, 0.8)' },   // Neon green
+            { color: '#0ff0fc', glow: 'rgba(15, 240, 252, 0.8)' },  // Electric cyan
+        ];
+        
+        // Resize rain canvas to fill screen
+        function resizeRainCanvas() {
+            rainCanvas.width = window.innerWidth;
+            rainCanvas.height = window.innerHeight;
+            updateGameFieldBounds();
+            initRainDrops();
+        }
+        
+        // Calculate game field position on screen
+        function updateGameFieldBounds() {
+            const gameContainer = document.querySelector('.game-container');
+            if (gameContainer) {
+                const rect = gameContainer.getBoundingClientRect();
+                gameFieldBounds = {
+                    left: rect.left,
+                    right: rect.right,
+                    top: rect.top,
+                    bottom: rect.bottom
+                };
+            }
+        }
+        
+        // Initialize rain drops
+        function initRainDrops() {
+            rainDrops = [];
+            const dropCount = Math.floor((rainCanvas.width * rainCanvas.height) / 8000);
+            
+            for (let i = 0; i < dropCount; i++) {
+                createRainDrop(true);
+            }
+        }
+        
+        // Create a single rain drop
+        function createRainDrop(randomY = false) {
+            const colorSet = rainColors[Math.floor(Math.random() * rainColors.length)];
+            const x = Math.random() * rainCanvas.width;
+            
+            // Check if drop would be inside game field
+            const isInGameField = x >= gameFieldBounds.left && x <= gameFieldBounds.right;
+            
+            rainDrops.push({
+                x: x,
+                y: randomY ? Math.random() * rainCanvas.height : -20,
+                length: Math.random() * 20 + 10,
+                speed: Math.random() * 8 + 6,
+                thickness: Math.random() * 2 + 0.5,
+                color: colorSet.color,
+                glow: colorSet.glow,
+                opacity: Math.random() * 0.5 + 0.3,
+                isInGameField: isInGameField
+            });
+        }
+        
+        // Update rain drops
+        function updateRainDrops() {
+            for (let i = rainDrops.length - 1; i >= 0; i--) {
+                const drop = rainDrops[i];
+                drop.y += drop.speed;
+                
+                // Update game field check
+                drop.isInGameField = drop.x >= gameFieldBounds.left && 
+                                     drop.x <= gameFieldBounds.right &&
+                                     drop.y >= gameFieldBounds.top && 
+                                     drop.y <= gameFieldBounds.bottom;
+                
+                // Remove drops that are off screen
+                if (drop.y > rainCanvas.height + drop.length) {
+                    rainDrops.splice(i, 1);
+                    createRainDrop(false);
+                }
+            }
+        }
+        
+        // Draw rain drops
+        function drawRain() {
+            rainCtx.clearRect(0, 0, rainCanvas.width, rainCanvas.height);
+            
+            rainDrops.forEach(drop => {
+                // Skip drops inside game field
+                if (drop.isInGameField) return;
+                
+                rainCtx.save();
+                rainCtx.globalAlpha = drop.opacity;
+                
+                // Create gradient for the drop
+                const gradient = rainCtx.createLinearGradient(
+                    drop.x, drop.y,
+                    drop.x, drop.y + drop.length
+                );
+                gradient.addColorStop(0, 'transparent');
+                gradient.addColorStop(0.3, drop.color);
+                gradient.addColorStop(1, drop.glow);
+                
+                // Draw glow effect
+                rainCtx.shadowBlur = 8;
+                rainCtx.shadowColor = drop.color;
+                
+                // Draw the drop
+                rainCtx.strokeStyle = gradient;
+                rainCtx.lineWidth = drop.thickness;
+                rainCtx.lineCap = 'round';
+                
+                rainCtx.beginPath();
+                rainCtx.moveTo(drop.x, drop.y);
+                rainCtx.lineTo(drop.x, drop.y + drop.length);
+                rainCtx.stroke();
+                
+                // Add bright tip
+                rainCtx.fillStyle = '#ffffff';
+                rainCtx.globalAlpha = drop.opacity * 0.8;
+                rainCtx.beginPath();
+                rainCtx.arc(drop.x, drop.y + drop.length, drop.thickness, 0, Math.PI * 2);
+                rainCtx.fill();
+                
+                rainCtx.restore();
+            });
+        }
+        
+        // Rain animation loop
+        function animateRain() {
+            updateRainDrops();
+            drawRain();
+            requestAnimationFrame(animateRain);
+        }
+        
+        // Initialize rain
+        resizeRainCanvas();
+        animateRain();
+        
+        // Update game field bounds on resize
+        window.addEventListener('resize', () => {
+            resizeRainCanvas();
+        });
+        
+        // Update bounds periodically (in case of layout changes)
+        setInterval(updateGameFieldBounds, 1000);
     </script>
 </body>
 </html>
